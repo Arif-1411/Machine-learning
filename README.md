@@ -67,7 +67,7 @@ machine-learning/
 1. Clone the repository
 
 ```bash
-git clone https://github.com/your-username/machine-learning.git
+git clone https://github.com/Arif-1411/machine-learning.git
 ```
 
 2. Install dependencies
@@ -86,5 +86,5 @@ jupyter notebook
 
 ## Author
 
-Arifudheen M
+Arifudheen 
 GitHub: [Arif-1411](https://github.com/Arif-1411)
