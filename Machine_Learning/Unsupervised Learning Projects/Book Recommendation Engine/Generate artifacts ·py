@@ -1,0 +1,77 @@
+"""
+Run this script once to regenerate broken pickle files.
+Usage: python generate_artifacts.py
+"""
+import pandas as pd
+import pickle
+import numpy as np
+from sklearn.neighbors import NearestNeighbors
+from scipy.sparse import csr_matrix
+import os
+
+print("Loading CSV files...")
+books   = pd.read_csv('Books Dataset/BX-Books.csv',
+                      sep=';', encoding='latin-1',
+                      low_memory=False, on_bad_lines='skip')
+ratings = pd.read_csv('Books Dataset/BX-Book-Ratings.csv',
+                      sep=';', encoding='latin-1',
+                      low_memory=False, on_bad_lines='skip')
+
+books.columns   = books.columns.str.strip()
+ratings.columns = ratings.columns.str.strip()
+
+# Rename to match notebook
+books.rename(columns={
+    'Book-Title'          : 'Title',
+    'Book-Author'         : 'Author',
+    'Year-Of-Publication' : 'year',
+    'Image-URL-L'         : 'image_url'
+}, inplace=True)
+
+ratings.rename(columns={
+    'User-ID'     : 'user_id',
+    'Book-Rating' : 'rating'
+}, inplace=True)
+
+print("Filtering active users (>200 ratings)...")
+active_users = ratings['user_id'].value_counts()
+active_users = active_users[active_users > 200].index
+ratings = ratings[ratings['user_id'].isin(active_users)]
+
+print("Merging ratings with books...")
+ratings_with_books = ratings.merge(books, on='ISBN')
+
+num_rating = (ratings_with_books
+              .groupby('Title')['rating']
+              .count()
+              .reset_index()
+              .rename(columns={'rating': 'num_of_rating'}))
+
+final_rating = ratings_with_books.merge(num_rating, on='Title')
+final_rating_df = final_rating[final_rating['num_of_rating'] >= 50].copy()
+final_rating_df.drop_duplicates(['user_id', 'Title', 'year'], inplace=True)
+
+print(f"final_rating_df shape: {final_rating_df.shape}")
+
+print("Building pivot table...")
+pivot_df = final_rating_df.pivot_table(
+    columns='user_id', index='Title', values='rating'
+).fillna(0)
+
+print(f"pivot_df shape: {pivot_df.shape}")
+
+print("Training NearestNeighbors model...")
+model = NearestNeighbors(algorithm='brute')
+model.fit(csr_matrix(pivot_df))
+
+books_name = pivot_df.index
+
+os.makedirs('artifacts', exist_ok=True)
+pickle.dump(model,          open('artifacts/model.pkl',          'wb'))
+pickle.dump(books_name,     open('artifacts/books_name.pkl',     'wb'))
+pickle.dump(final_rating_df,open('artifacts/final_rating_df.pkl','wb'))
+pickle.dump(pivot_df,       open('artifacts/pivot_df.pkl',       'wb'))
+
+print(f"\n✅ All 4 artifacts saved!")
+print(f"   Books : {len(books_name)}")
+print(f"   Pivot : {pivot_df.shape}")
